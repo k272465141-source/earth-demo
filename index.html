@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>地球</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body {
+      background: #eff0f8;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      display: block;
+      background: #ffffff; /* 【开发注意】放入 App 时删除此行，画布即为透明 */
+    }
+  </style>
+</head>
+<body>
+  <script src="three.min.js"></script>
+  <script>
+    const W = 720, H = 720;
+    const scene = new THREE.Scene();
+
+    const frustumSize = 2.8;
+    const camera = new THREE.OrthographicCamera(
+      -frustumSize / 2,  frustumSize / 2,
+       frustumSize / 2, -frustumSize / 2,
+      0.1, 1000
+    );
+    camera.position.z = 10;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(W, H);
+    renderer.setClearColor(0x000000, 0); // 渲染器始终透明，背景色由 CSS 控制
+    document.body.appendChild(renderer.domElement);
+
+    const texture = new THREE.TextureLoader().load(
+      'earthmap.png?v=' + Date.now(),
+      tex => {
+        tex.minFilter       = THREE.LinearFilter;
+        tex.magFilter       = THREE.LinearFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate     = true;
+      }
+    );
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: {
+        map:          { value: texture },
+        dotGrid:      { value: new THREE.Vector2(300, 150) },
+        threshold:    { value: 0.50 },
+        dotColor:     { value: new THREE.Color(0x7C81DF) },
+        dotRadius:    { value: 0.20 },
+        edgePower:    { value: 0.3 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vViewNormal;
+
+        void main() {
+          vUv = uv;
+          vViewNormal = normalize(normalMatrix * normal);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D map;
+        uniform vec2      dotGrid;
+        uniform float     threshold;
+        uniform vec3      dotColor;
+        uniform float     dotRadius;
+        uniform float     edgePower;
+
+        varying vec2 vUv;
+        varying vec3 vViewNormal;
+
+        void main() {
+          vec2  gridUv   = vUv * dotGrid;
+          vec2  cell     = floor(gridUv);
+          vec2  centerUv = (cell + 0.5) / dotGrid;
+
+          float land = texture2D(map, centerUv).r;
+          if (land < threshold) discard;
+
+          vec2  local = fract(gridUv) - 0.5;
+          float dist  = length(local);
+          float fw    = length(fwidth(gridUv)) * 0.5;
+
+          float alpha = 1.0 - smoothstep(dotRadius - fw, dotRadius + fw, dist);
+          if (alpha < 0.01) discard;
+
+          float faceAlpha = gl_FrontFacing ? alpha : alpha * 0.28;
+
+          float rim = abs(vViewNormal.z);
+          float edgeFade = pow(clamp(rim, 0.0, 1.0), edgePower);
+
+          float finalAlpha = faceAlpha * edgeFade;
+          if (finalAlpha < 0.01) discard;
+
+          gl_FragColor = vec4(dotColor, finalAlpha);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+
+    const INIT_X_DEG = -14;
+    const INIT_Y_DEG = 160;
+
+    const earth = new THREE.Mesh(
+      new THREE.SphereGeometry(1.25, 128, 128),
+      material
+    );
+    earth.rotation.x = THREE.MathUtils.degToRad(INIT_X_DEG);
+    earth.rotation.y = THREE.MathUtils.degToRad(INIT_Y_DEG);
+
+    const pivot = new THREE.Object3D();
+    pivot.add(earth);
+    scene.add(pivot);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+
+    let animId;
+    function animate() {
+      animId = requestAnimationFrame(animate);
+      earth.rotation.y += 0.002;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    document.addEventListener('visibilitychange', () => {
+      document.hidden ? cancelAnimationFrame(animId) : animate();
+    });
+  </script>
+</body>
+</html>

@@ -17,7 +17,7 @@
     }
     canvas {
       display: block;
-      background: #ffffff; /* 【开发注意】放入 App 时删除此行，画布即为透明 */
+      background: #ffffff; /* 【开发注意】放入 App 时删除此行 */
     }
   </style>
 </head>
@@ -38,7 +38,7 @@
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(W, H);
-    renderer.setClearColor(0x000000, 0); // 渲染器始终透明，背景色由 CSS 控制
+    renderer.setClearColor(0x000000, 0);
     document.body.appendChild(renderer.domElement);
 
     const texture = new THREE.TextureLoader().load(
@@ -63,7 +63,6 @@
       vertexShader: `
         varying vec2 vUv;
         varying vec3 vViewNormal;
-
         void main() {
           vUv = uv;
           vViewNormal = normalize(normalMatrix * normal);
@@ -113,6 +112,7 @@
 
     const INIT_X_DEG = -14;
     const INIT_Y_DEG = 160;
+    const TILT_Z_DEG = -15; // 向右倾斜 15°（负值 = 顺时针）
 
     const earth = new THREE.Mesh(
       new THREE.SphereGeometry(1.25, 128, 128),
@@ -122,6 +122,7 @@
     earth.rotation.y = THREE.MathUtils.degToRad(INIT_Y_DEG);
 
     const pivot = new THREE.Object3D();
+    pivot.rotation.z = THREE.MathUtils.degToRad(TILT_Z_DEG); // ← 新增：Z 轴倾斜
     pivot.add(earth);
     scene.add(pivot);
 
@@ -130,7 +131,7 @@
     let animId;
     function animate() {
       animId = requestAnimationFrame(animate);
-      earth.rotation.y += 0.002;
+      earth.rotation.y += 0.002; // 仍绕自身 Y 轴自转
       renderer.render(scene, camera);
     }
     animate();
